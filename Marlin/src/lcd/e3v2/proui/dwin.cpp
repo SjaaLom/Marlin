@@ -200,7 +200,7 @@ typedef struct {
 select_t select_page{0}, select_print{0};
 
 #if ENABLED(LCD_BED_TRAMMING)
-  constexpr float bed_tramming_inset_lfbr[] = BED_TRAMMING_INSET_LFRB;
+  constexpr float bed_tramming_inset_lfrb[] = BED_TRAMMING_INSET_LFRB;
 #endif
 
 bool hash_changed = true; // Flag to know if message status was changed
@@ -466,8 +466,8 @@ void popupPauseOrStop() {
       FSTR_P errorstr;
       uint8_t icon;
       switch (state) {
-        case 0:  errorstr = GET_TEXT_F(MSG_TEMP_TOO_LOW);       icon = ICON_TempTooLow;  break;
-        case 1:  errorstr = GET_TEXT_F(MSG_TEMP_TOO_HIGH);      icon = ICON_TempTooHigh; break;
+        case 0:  errorstr = GET_TEXT_F(DGUS_MSG_TEMP_TOO_LOW);  icon = ICON_TempTooLow;  break;
+        case 1:  errorstr = GET_TEXT_F(DGUS_MSG_TEMP_TOO_HIGH); icon = ICON_TempTooHigh; break;
         default: errorstr = GET_TEXT_F(MSG_ERR_HEATING_FAILED); icon = ICON_Temperature; break; // May be thermal runaway, temp malfunction, etc.
       }
       dwinShowPopup(icon, heaterstr, errorstr, BTN_Continue);
@@ -1744,7 +1744,7 @@ void dwinLevelingDone() {
         break;
       case PID_TEMP_TOO_HIGH:
         checkkey = last_checkkey;
-        dwinPopupConfirm(ICON_TempTooHigh, GET_TEXT_F(MSG_PID_AUTOTUNE_FAILED), GET_TEXT_F(MSG_TEMP_TOO_HIGH));
+        dwinPopupConfirm(ICON_TempTooHigh, GET_TEXT_F(MSG_PID_AUTOTUNE_FAILED), GET_TEXT_F(DGUS_MSG_TEMP_TOO_HIGH));
         break;
       case AUTOTUNE_DONE:
         checkkey = last_checkkey;
@@ -2435,23 +2435,23 @@ void setFlow() { setPIntOnClick(FLOW_EDIT_MIN, FLOW_EDIT_MAX, []{ planner.refres
     switch (point) {
       case 0:
         LCD_MESSAGE(MSG_TRAM_FL);
-        x = bed_tramming_inset_lfbr[0];
-        y = bed_tramming_inset_lfbr[1];
+        x = bed_tramming_inset_lfrb[0];
+        y = bed_tramming_inset_lfrb[1];
         break;
       case 1:
         LCD_MESSAGE(MSG_TRAM_FR);
-        x = X_BED_SIZE - bed_tramming_inset_lfbr[2];
-        y = bed_tramming_inset_lfbr[1];
+        x = X_BED_SIZE - bed_tramming_inset_lfrb[2];
+        y = bed_tramming_inset_lfrb[1];
         break;
       case 2:
         LCD_MESSAGE(MSG_TRAM_BR);
-        x = X_BED_SIZE - bed_tramming_inset_lfbr[2];
-        y = Y_BED_SIZE - bed_tramming_inset_lfbr[3];
+        x = X_BED_SIZE - bed_tramming_inset_lfrb[2];
+        y = Y_BED_SIZE - bed_tramming_inset_lfrb[3];
         break;
       case 3:
         LCD_MESSAGE(MSG_TRAM_BL);
-        x = bed_tramming_inset_lfbr[0];
-        y = Y_BED_SIZE - bed_tramming_inset_lfbr[3];
+        x = bed_tramming_inset_lfrb[0];
+        y = Y_BED_SIZE - bed_tramming_inset_lfrb[3];
         break;
       #if ENABLED(BED_TRAMMING_INCLUDE_CENTER)
         case 4:
@@ -4316,6 +4316,7 @@ void drawMaxAccelMenu() {
     void applyEditMeshX() { bedLevelTools.mesh_x = menuData.value; }
     void applyEditMeshY() { bedLevelTools.mesh_y = menuData.value; }
     void resetMesh() { bedLevelTools.meshReset(); LCD_MESSAGE(MSG_MESH_RESET); }
+    void zeroPoint() { bedLevelTools.manualValueUpdate(bedLevelTools.mesh_x, bedLevelTools.mesh_y, true); editZValueItem->redraw(); LCD_MESSAGE(MSG_ZERO_MESH_POINT); }
     void setEditMeshX() { hmiValue.select = 0; setIntOnClick(0, GRID_MAX_POINTS_X - 1, bedLevelTools.mesh_x, applyEditMeshX, liveEditMesh); }
     void setEditMeshY() { hmiValue.select = 1; setIntOnClick(0, GRID_MAX_POINTS_Y - 1, bedLevelTools.mesh_y, applyEditMeshY, liveEditMesh); }
     void setEditZValue() { setPFloatOnClick(Z_OFFSET_MIN, Z_OFFSET_MAX, 3); }
@@ -4417,6 +4418,7 @@ void drawMaxAccelMenu() {
         EDIT_ITEM(ICON_MeshEditX, MSG_MESH_X, onDrawPInt8Menu, setEditMeshX, &bedLevelTools.mesh_x);
         EDIT_ITEM(ICON_MeshEditY, MSG_MESH_Y, onDrawPInt8Menu, setEditMeshY, &bedLevelTools.mesh_y);
         editZValueItem = EDIT_ITEM(ICON_MeshEditZ, MSG_MESH_EDIT_Z, onDrawPFloat2Menu, setEditZValue, &bedlevel.z_values[bedLevelTools.mesh_x][bedLevelTools.mesh_y]);
+        MENU_ITEM(ICON_SetZOffset, MSG_ZERO_MESH_POINT, onDrawMenuItem, zeroPoint);
       }
       updateMenu(editMeshMenu);
     }
