@@ -1,0 +1,80 @@
+@using Configurator.Shared
+
+<div class="mb-2 border-bottom pb-2">
+    <div class="d-flex align-items-center">
+        <div class="form-check form-switch me-2">
+            <input class="form-check-input" type="checkbox" checked="@(Setting.Enabled)" @onchange="OnToggle" id="switch-@Setting.Key">
+            <label class="form-check-label fw-bold" for="switch-@Setting.Key">@Setting.Key</label>
+        </div>
+    </div>
+
+    @if (Setting.Enabled)
+    {
+        <div class="ms-4 mt-2">
+            @if (Setting.Type == "bool")
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" checked="@(Setting.Value == "true")" @onchange="OnBoolValueChange" id="bool-@Setting.Key">
+                    <label class="form-check-label" for="bool-@Setting.Key">Value (True/False)</label>
+                </div>
+            }
+            else if (Setting.Type != "switch")
+            {
+                <div class="input-group input-group-sm">
+                    @if (Setting.Options != null && Setting.Options.Any())
+                    {
+                        <select class="form-select" value="@Setting.Value" @onchange="OnSelectChange">
+                            @foreach (var opt in Setting.Options)
+                            {
+                                <option value="@opt.Key">@opt.Value</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <input type="text" class="form-control" value="@Setting.Value" @onchange="OnTextChange">
+                    }
+
+                    @if (!string.IsNullOrEmpty(Setting.Units))
+                    {
+                        <span class="input-group-text">@Setting.Units</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Setting.Description))
+    {
+        <div class="form-text ms-4 small text-muted">@Setting.Description</div>
+    }
+</div>
+
+@code {
+    [Parameter] public MarlinSetting Setting { get; set; } = new();
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private async Task OnToggle(ChangeEventArgs e)
+    {
+        Setting.Enabled = (bool)(e.Value ?? false);
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task OnTextChange(ChangeEventArgs e)
+    {
+        Setting.Value = e.Value?.ToString() ?? "";
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task OnSelectChange(ChangeEventArgs e)
+    {
+        Setting.Value = e.Value?.ToString() ?? "";
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task OnBoolValueChange(ChangeEventArgs e)
+    {
+        Setting.Value = (bool)(e.Value ?? false) ? "true" : "false";
+        await OnChange.InvokeAsync();
+    }
+}

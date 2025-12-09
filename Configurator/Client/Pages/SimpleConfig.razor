@@ -1,0 +1,170 @@
+@page "/simple-config"
+@using Configurator.Client.Services
+@using Configurator.Shared
+@using Configurator.Client.Components
+@inject IConfigService ConfigService
+@inject AppState AppStateService
+@implements IDisposable
+
+<PageTitle>Simple Configuration</PageTitle>
+
+<h1>Simple Configuration</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">
+        Error loading configuration: @errorMessage
+    </div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-3">
+            <div class="list-group">
+                @foreach (var category in categories)
+                {
+                    <button type="button" class="list-group-item list-group-item-action @(selectedCategory == category && string.IsNullOrEmpty(AppStateService.SearchTerm) ? "active" : "")" 
+                            @onclick="() => SelectCategory(category)" disabled="@(!string.IsNullOrEmpty(AppStateService.SearchTerm))">
+                        @category
+                    </button>
+                }
+            </div>
+        </div>
+        <div class="col-md-9">
+            @if (!string.IsNullOrEmpty(AppStateService.SearchTerm))
+            {
+                <div class="card">
+                    <div class="card-header">
+                        Search Results for "@AppStateService.SearchTerm"
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var results = GetSearchResults().ToList();
+                        }
+                        @foreach (var setting in results)
+                        {
+                            @if (evaluator?.IsMet(setting.Requires) == true)
+                            {
+                                <SettingEditor Setting="setting" OnChange="StateHasChanged" />
+                            }
+                        }
+                        @if (!results.Any())
+                        {
+                            <p>No matching settings found.</p>
+                        }
+                    </div>
+                </div>
+            }
+            else if (selectedCategory != null)
+            {
+                <div class="card">
+                    <div class="card-header">
+                        @selectedCategory
+                    </div>
+                    <div class="card-body">
+                        @foreach (var setting in GetSettingsForCategory(selectedCategory))
+                        {
+                            @if (evaluator?.IsMet(setting.Requires) == true)
+                            {
+                                <SettingEditor Setting="setting" OnChange="StateHasChanged" />
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<ConfigGroup> schema = new();
+    private List<string> categories = new() { "General", "Motion", "Thermal", "LCD", "Bed Leveling", "Endstops", "Filament" };
+    private string? selectedCategory;
+    private RequirementsEvaluator? evaluator;
+
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            AppStateService.OnChange += StateHasChanged;
+            AppStateService.OnSaveRequested += SaveConfig;
+
+            schema = await ConfigService.GetSchemaAsync();
+            var allSettings = schema.SelectMany(f => f.SubGroups.SelectMany(s => s.Settings));
+            evaluator = new RequirementsEvaluator(allSettings);
+            selectedCategory = categories.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        AppStateService.OnChange -= StateHasChanged;
+        AppStateService.OnSaveRequested -= SaveConfig;
+    }
+
+    private void SelectCategory(string category)
+    {
+        selectedCategory = category;
+        AppStateService.SearchTerm = ""; // Clear search when selecting a category
+    }
+
+    private IEnumerable<MarlinSetting> GetSearchResults()
+    {
+        if (string.IsNullOrWhiteSpace(AppStateService.SearchTerm)) return Enumerable.Empty<MarlinSetting>();
+        
+        var allSettings = schema.SelectMany(f => f.SubGroups.SelectMany(s => s.Settings));
+        return allSettings.Where(s => s.Key.Contains(AppStateService.SearchTerm, StringComparison.OrdinalIgnoreCase) || 
+                                      s.Description.Contains(AppStateService.SearchTerm, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private IEnumerable<MarlinSetting> GetSettingsForCategory(string category)
+    {
+        // This is a simplified mapping logic. In a real app, we'd have a more robust mapping
+        // between Marlin sections and these categories.
+        // For now, we'll do some basic keyword matching on the Section or Key.
+        
+        var allSettings = schema.SelectMany(f => f.SubGroups.SelectMany(s => s.Settings));
+
+        return allSettings.Where(s => IsInCategory(s, category));
+    }
+
+    private bool IsInCategory(MarlinSetting setting, string category)
+    {
+        var key = setting.Key.ToUpper();
+        var section = setting.Section.ToUpper();
+        var cat = category.ToUpper();
+
+        if (cat == "GENERAL") return section.Contains("INFO") || section.Contains("MACHINE") || section.Contains("SERIAL") || key.Contains("SERIAL_PORT") || key.Contains("BAUDRATE") || key.Contains("MOTHERBOARD") || key.Contains("UUID");
+        if (cat == "MOTION") return section.Contains("STEPPER") || section.Contains("MOVEMENT") || key.Contains("ACCELERATION") || key.Contains("JERK") || key.Contains("STEPS_PER_UNIT");
+        if (cat == "THERMAL") return section.Contains("TEMPERATURE") || section.Contains("HEATER") || section.Contains("BED") || section.Contains("THERMAL") || key.Contains("TEMP_");
+        if (cat == "LCD") return section.Contains("LCD") || section.Contains("DISPLAY") || section.Contains("CONTROLLER") || key.Contains("LCD_");
+        if (cat == "BED LEVELING") return section.Contains("LEVELING") || section.Contains("PROBE") || key.Contains("LEVELING");
+        if (cat == "ENDSTOPS") return section.Contains("ENDSTOP") || key.Contains("ENDSTOP");
+        if (cat == "FILAMENT") return section.Contains("FILAMENT") || key.Contains("FILAMENT");
+
+        return false;
+    }
+
+    private async Task SaveConfig()
+    {
+        var allSettings = schema.SelectMany(f => f.SubGroups.SelectMany(s => s.Settings)).ToList();
+        await ConfigService.SaveConfigAsync(allSettings);
+        // Show success message (omitted for brevity)
+    }
+}

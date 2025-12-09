@@ -1,0 +1,175 @@
+@page "/advanced-config"
+@using Configurator.Client.Services
+@using Configurator.Shared
+@using Configurator.Client.Components
+@inject IConfigService ConfigService
+@inject AppState AppStateService
+@implements IDisposable
+
+<PageTitle>Advanced Configuration</PageTitle>
+
+<h1>Advanced Configuration</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <div class="accordion" id="filesAccordion">
+                @foreach (var fileGroup in schema)
+                {
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading-@fileGroup.Name.Replace(".", "-")">
+                            <button class="accordion-button @(selectedFile == fileGroup && string.IsNullOrEmpty(AppStateService.SearchTerm) ? "" : "collapsed")" type="button" 
+                                    @onclick="() => SelectFile(fileGroup)"
+                                    disabled="@(!string.IsNullOrEmpty(AppStateService.SearchTerm))">
+                                @fileGroup.Name
+                            </button>
+                        </h2>
+                        <div id="collapse-@fileGroup.Name.Replace(".", "-")" class="accordion-collapse collapse @(selectedFile == fileGroup && string.IsNullOrEmpty(AppStateService.SearchTerm) ? "show" : "")">
+                            <div class="accordion-body p-0">
+                                <div class="list-group list-group-flush">
+                                    @foreach (var sec in fileGroup.SubGroups)
+                                    {
+                                        <button type="button" class="list-group-item list-group-item-action @(selectedSection == sec && string.IsNullOrEmpty(AppStateService.SearchTerm) ? "active" : "")"
+                                                @onclick="() => SelectSection(sec)">
+                                            @sec.Name
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="col-md-8">
+            @if (!string.IsNullOrEmpty(AppStateService.SearchTerm))
+            {
+                <div class="card">
+                    <div class="card-header">
+                        Search Results for "@AppStateService.SearchTerm"
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var results = GetSearchResults().ToList();
+                        }
+                        @foreach (var setting in results)
+                        {
+                            <SettingEditor Setting="setting" OnChange="StateHasChanged" />
+                        }
+                        @if (!results.Any())
+                        {
+                            <p>No matching settings found.</p>
+                        }
+                    </div>
+                </div>
+            }
+            else if (selectedSection != null)
+            {
+                <div class="card">
+                    <div class="card-header">
+                        @selectedSection.Name
+                    </div>
+                    <div class="card-body">
+                        @foreach (var setting in selectedSection.Settings)
+                        {
+                            <SettingEditor Setting="setting" OnChange="StateHasChanged" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<ConfigGroup> schema = new();
+    private ConfigGroup? selectedFile;
+    private ConfigGroup? selectedSection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            AppStateService.OnChange += StateHasChanged;
+            AppStateService.OnSaveRequested += SaveConfig;
+
+            schema = await ConfigService.GetSchemaAsync();
+            if (schema.Any())
+            {
+                selectedFile = schema.First();
+                if (selectedFile.SubGroups.Any())
+                {
+                    selectedSection = selectedFile.SubGroups.First();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        AppStateService.OnChange -= StateHasChanged;
+        AppStateService.OnSaveRequested -= SaveConfig;
+    }
+
+    private void SelectFile(ConfigGroup file)
+    {
+        selectedFile = file;
+        selectedSection = file.SubGroups.FirstOrDefault();
+        AppStateService.SearchTerm = "";
+    }
+
+    private void SelectSection(ConfigGroup section)
+    {
+        selectedSection = section;
+        AppStateService.SearchTerm = "";
+    }
+
+    private IEnumerable<MarlinSetting> GetSearchResults()
+    {
+        if (string.IsNullOrWhiteSpace(AppStateService.SearchTerm)) return Enumerable.Empty<MarlinSetting>();
+        
+        var term = AppStateService.SearchTerm;
+        var results = new List<MarlinSetting>();
+
+        foreach (var file in schema)
+        {
+            foreach (var section in file.SubGroups)
+            {
+                bool fileMatches = file.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+                bool sectionMatches = section.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+                foreach (var setting in section.Settings)
+                {
+                    if (fileMatches || sectionMatches ||
+                        setting.Key.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        setting.Description.Contains(term, StringComparison.OrdinalIgnoreCase))
+                    {
+                        results.Add(setting);
+                    }
+                }
+            }
+        }
+        
+        return results;
+    }
+
+    private async Task SaveConfig()
+    {
+        var allSettings = schema.SelectMany(f => f.SubGroups.SelectMany(s => s.Settings)).ToList();
+        await ConfigService.SaveConfigAsync(allSettings);
+    }
+}

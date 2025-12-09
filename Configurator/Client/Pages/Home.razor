@@ -1,0 +1,64 @@
+﻿@page "/"
+@using Configurator.Client.Services
+@inject IConfigService ConfigService
+
+<PageTitle>Marlin Configurator</PageTitle>
+
+<h1>Marlin Configurator</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    if (!pythonInstalled)
+    {
+        <div class="alert alert-warning" role="alert">
+            <strong>Warning:</strong> Python is not installed or not found in PATH. 
+            The configurator may not be able to generate the schema correctly.
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Configuration Status</h5>
+                    <p class="card-text">
+                        Loaded <strong>@totalSettings</strong> settings across <strong>@totalFiles</strong> files.
+                    </p>
+                    <a href="simple-config" class="btn btn-primary">Simple Config</a>
+                    <a href="advanced-config" class="btn btn-secondary">Advanced Config</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool pythonInstalled = false;
+    private int totalSettings = 0;
+    private int totalFiles = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        pythonInstalled = await ConfigService.CheckPythonAsync();
+        
+        try 
+        {
+            var schema = await ConfigService.GetSchemaAsync();
+            totalFiles = schema.Count;
+            totalSettings = schema.Sum(f => f.SubGroups.Sum(s => s.Settings.Count));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading schema: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
